@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     const result =  streamText({
         model: getChatModel(conversation.model),
         system: conversation.systemPrompt ?? "You are ChaiGpt , a helpful assistant",
-        tools: await createTools(),
+      tools: await createTools({userId: user.id, conversationId: conversation.id}),
         messages: await convertToModelMessages(messages),
         stopWhen: stepCountIs(5),
         toolChoice:"auto"

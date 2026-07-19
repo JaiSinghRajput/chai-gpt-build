@@ -32,3 +32,13 @@ export type Conversation = Prisma.ConversationModel
  * 
  */
 export type Message = Prisma.MessageModel
+/**
+ * Model Note
+ * 
+ */
+export type Note = Prisma.NoteModel
+/**
+ * Model Memory
+ * 
+ */
+export type Memory = Prisma.MemoryModel

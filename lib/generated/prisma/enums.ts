@@ -26,3 +26,21 @@ export const MessageStatus = {
 } as const
 
 export type MessageStatus = (typeof MessageStatus)[keyof typeof MessageStatus]
+
+
+export const NoteStatus = {
+  ACTIVE: 'ACTIVE',
+  ARCHIVED: 'ARCHIVED'
+} as const
+
+export type NoteStatus = (typeof NoteStatus)[keyof typeof NoteStatus]
+
+
+export const MemoryType = {
+  PREFERENCE: 'PREFERENCE',
+  PROFILE: 'PROFILE',
+  PROJECT: 'PROJECT',
+  CUSTOM: 'CUSTOM'
+} as const
+
+export type MemoryType = (typeof MemoryType)[keyof typeof MemoryType]
