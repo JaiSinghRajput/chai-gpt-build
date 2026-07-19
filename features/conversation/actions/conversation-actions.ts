@@ -56,7 +56,18 @@ export async function getConversation(conversationId: string) {
 export async function listConversations(): Promise<ConversationListItem[]> {
     const user = await requireUser();
 
-    const conversations = await prisma.conversation.findMany({
+    type ConversationRow = {
+        id: string;
+        title: string;
+        isPinned: boolean;
+        isArchived: boolean;
+        lastMessageAt: Date;
+        createdAt: Date;
+        updatedAt: Date;
+        _count: { branches: number };
+    };
+
+    const conversations: ConversationRow[] = await prisma.conversation.findMany({
         where: { userId: user.id, isArchived: false },
         orderBy: [{ isPinned: "desc" }, { lastMessageAt: "desc" }],
         select: {
