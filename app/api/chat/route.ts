@@ -1,8 +1,10 @@
 import { loadChatMessages, saveChatMessages } from "@/features/ai/actions/chat-store";
+import { createTools } from "@/features/ai/actions/create-tools";
 import { getChatModel } from "@/features/ai/utils/model";
 import { requireUser } from "@/features/auth/action/require-user";
 import { prisma } from "@/lib/db";
 import { auth } from "@clerk/nextjs/server";
+import { stepCountIs } from "ai";
 import { convertToModelMessages, createIdGenerator, createUIMessageStream, createUIMessageStreamResponse, streamText, toUIMessageStream, type UIMessage } from "ai";
 /**
  * POST /api/chat — Streams an AI assistant reply for a conversation.
@@ -47,7 +49,10 @@ export async function POST(req: Request) {
     const result =  streamText({
         model: getChatModel(conversation.model),
         system: conversation.systemPrompt ?? "You are ChaiGpt , a helpful assistant",
+        tools: await createTools(),
         messages: await convertToModelMessages(messages),
+        stopWhen: stepCountIs(5),
+        toolChoice:"auto"
     });
 
     result.consumeStream();
