@@ -4,6 +4,12 @@ import { prisma } from "@/lib/db";
 import { requireUser } from "@/features/auth/action/require-user";
 import { revalidatePath } from "next/cache";
 
+export type BranchListItem = {
+  id: string;
+  name: string;
+  isDefault: boolean;
+};
+
 async function assertOwnership(conversationId: string) {
   const user = await requireUser();
   const conversation = await prisma.conversation.findFirst({
@@ -13,11 +19,16 @@ async function assertOwnership(conversationId: string) {
   return conversation;
 }
 
-export async function listBranches(conversationId: string) {
+export async function listBranches(conversationId: string): Promise<BranchListItem[]> {
   await assertOwnership(conversationId);
   return prisma.branch.findMany({
     where: { conversationId, deletedAt: null },
     orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }],
+    select: {
+      id: true,
+      name: true,
+      isDefault: true,
+    },
   });
 }
 

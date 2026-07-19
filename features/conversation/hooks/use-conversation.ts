@@ -12,6 +12,7 @@ import {
 } from "@/features/conversation/actions/conversation-actions";
 import { queryKeys } from "../utils/query-keys";
 import { createBranch, deleteBranch, listBranches, renameBranch } from "@/features/conversation/actions/branch-actions";
+import type { BranchListItem } from "@/features/conversation/actions/branch-actions";
 
 
 /**
@@ -103,7 +104,7 @@ export function useDeleteConversation(activeId?: string) {
 
 /** Fetches branches for a conversation. Only enabled once the caller wants them. */
 export function useBranches(conversationId: string, enabled: boolean) {
-    return useQuery({
+    return useQuery<BranchListItem[]>({
         queryKey: queryKeys.branches.byConversation(conversationId),
         queryFn: () => listBranches(conversationId),
         enabled,
