@@ -25,19 +25,64 @@ function toUIMessageParts(
   return [{ type: "text", text: content }];
 }
 
+/** Resolves the id of a conversation's default ("main") branch. */
+export async function getDefaultBranchId(conversationId: string) {
+  const existing = await prisma.branch.findFirst({
+    where: { conversationId, isDefault: true },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+
+  const created = await prisma.branch.create({
+    data: { conversationId, name: "main", isDefault: true },
+    select: { id: true },
+  });
+  return created.id;
+}
+
+type MessageRow = {
+  id: string;
+  role: string;
+  content: string;
+  parts: Prisma.JsonValue | null;
+  createdAt: Date;
+};
+
 /**
- * Loads all messages for a conversation from the database as AI SDK `UIMessage`s.
+ * Loads all messages for a branch from the database as AI SDK `UIMessage`s, by
+ * walking the message tree from the branch's head back to the root. This
+ * naturally includes shared history inherited from any ancestor branch.
  *
  * @param conversationId - The conversation whose messages to load.
+ * @param branchId - The branch whose transcript to load. Defaults to the
+ *   conversation's main branch.
  * @returns Messages ordered oldest to newest, ready for `useChat`.
  */
 export async function loadChatMessages(
-  conversationId: string
+  conversationId: string,
+  branchId?: string
 ): Promise<UIMessage[]> {
-  const rows = await prisma.message.findMany({
-    where: { conversationId },
-    orderBy: { createdAt: "asc" },
+  const activeBranchId = branchId ?? (await getDefaultBranchId(conversationId));
+
+  const branch = await prisma.branch.findUniqueOrThrow({
+    where: { id: activeBranchId },
+    select: { headMessageId: true },
   });
+
+  if (!branch.headMessageId) return [];
+
+  const rows = await prisma.$queryRaw<MessageRow[]>`
+    WITH RECURSIVE thread AS (
+      SELECT id, role, content, parts, "createdAt", "parentId"
+      FROM "Message" WHERE id = ${branch.headMessageId}
+      UNION ALL
+      SELECT m.id, m.role, m.content, m.parts, m."createdAt", m."parentId"
+      FROM "Message" m
+      INNER JOIN thread t ON m.id = t."parentId"
+    )
+    SELECT id, role, content, parts, "createdAt" FROM thread
+    ORDER BY "createdAt" ASC
+  `;
 
   return rows.map((row) => ({
     id: row.id,
@@ -48,14 +93,21 @@ export async function loadChatMessages(
 
 type SaveChatMessagesOptions = {
   updateTitle?: boolean;
+  /** Branch to attach new messages to. Defaults to the conversation's main branch. */
+  branchId?: string;
 };
 
 /**
- * Upserts AI SDK `UIMessage`s into the database for a conversation.
+ * Upserts AI SDK `UIMessage`s into the database for a conversation branch.
+ *
+ * New messages are appended to the branch's tree (parented on the branch's
+ * current head) and advance the branch head; already-existing messages only
+ * have their content/parts refreshed, never their tree position.
  *
  * @param conversationId - Target conversation ID.
  * @param messages - Messages to persist (system messages are skipped).
  * @param options.updateTitle - When true, auto-titles "New Chat" from the first user message.
+ * @param options.branchId - Branch to save into. Defaults to the main branch.
  */
 export async function saveChatMessages(
   conversationId: string,
@@ -63,6 +115,15 @@ export async function saveChatMessages(
   options: SaveChatMessagesOptions = {}
 ) {
   const { updateTitle = true } = options;
+  const branchId = options.branchId ?? (await getDefaultBranchId(conversationId));
+
+  const branch = await prisma.branch.findUniqueOrThrow({
+    where: { id: branchId },
+    select: { headMessageId: true },
+  });
+
+  let parentId = branch.headMessageId;
+  let newHeadId = parentId;
 
   for (const message of messages) {
     if (message.role === "system") continue;
@@ -70,21 +131,46 @@ export async function saveChatMessages(
     const content = getMessageText(message);
     const role = message.role === "assistant" ? "ASSISTANT" : "USER";
 
-    await prisma.message.upsert({
+    const existing = await prisma.message.findUnique({
       where: { id: message.id },
-      create: {
+      select: { id: true },
+    });
+
+    if (existing) {
+      await prisma.message.update({
+        where: { id: message.id },
+        data: {
+          content,
+          parts: message.parts as Prisma.InputJsonValue,
+          status: "COMPLETE",
+        },
+      });
+      // Existing messages keep their original tree position; they don't
+      // move the branch head or become someone else's parent here.
+      continue;
+    }
+
+    await prisma.message.create({
+      data: {
         id: message.id,
         conversationId,
+        branchId,
+        parentId,
         role,
         status: "COMPLETE",
         content,
         parts: message.parts as Prisma.InputJsonValue,
       },
-      update: {
-        content,
-        parts: message.parts as Prisma.InputJsonValue,
-        status: "COMPLETE",
-      },
+    });
+
+    parentId = message.id;
+    newHeadId = message.id;
+  }
+
+  if (newHeadId !== branch.headMessageId) {
+    await prisma.branch.update({
+      where: { id: branchId },
+      data: { headMessageId: newHeadId },
     });
   }
 

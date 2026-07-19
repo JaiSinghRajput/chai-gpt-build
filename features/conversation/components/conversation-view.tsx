@@ -11,31 +11,35 @@ import { toast } from 'sonner';
 import { ChatEmpty } from './chat-empty';
 import { ChatMessages } from './chat-messages';
 import { ChatComposer } from './chat-composer';
+import { useRouter } from 'next/navigation';
 
 type ConversationViewProps = {
     conversationId: string;
+    branchId: string;
+    branches: { id: string; name: string; isDefault: boolean }[];
     initialMessages: UIMessage[];
 };
 
 /**
  * Main chat view — header, message list (or empty state), and composer with streaming.
  */
-export const ConversationView = ({ conversationId, initialMessages }: ConversationViewProps) => {
+export const ConversationView = ({ conversationId, branchId, branches, initialMessages }: ConversationViewProps) => {
 
     const queryClient = useQueryClient();
     const { data: conversations } = useConversations();
+    const router = useRouter();
 
     const transport = useMemo(() => new DefaultChatTransport({
         api: "/api/chat",
-        prepareSendMessagesRequest: ({ id, messages }) => ({
+        prepareSendMessagesRequest: ({ messages }) => ({
             body: {
-                id, message: messages.at(-1)
+                id: conversationId, branchId, message: messages.at(-1)
             }
         })
-    }), []);
+    }), [conversationId, branchId]);
 
     const { messages, sendMessage, status } = useChat({
-        id: conversationId,
+        id: `${conversationId}:${branchId}`,
         messages: initialMessages,
         transport,
         onFinish: () => {
@@ -48,7 +52,10 @@ export const ConversationView = ({ conversationId, initialMessages }: Conversati
         },
     })
     const title =
-    conversations?.find((item) => item.id === conversationId)?.title ?? "Chat";
+        conversations?.find((item) => item.id === conversationId)?.title ?? "Chat";
+    const handleSwitchBranch = (nextBranchId: string) => {
+        router.push(`/c/${conversationId}?branch=${nextBranchId}`);
+    };
 
     return (
         <div className="flex h-full min-h-0 flex-1 flex-col">
@@ -61,7 +68,7 @@ export const ConversationView = ({ conversationId, initialMessages }: Conversati
             {messages.length === 0 ? (
                 <ChatEmpty />
             ) : (
-                <ChatMessages messages={messages} status={status} />
+                <ChatMessages messages={messages} status={status} conversationId={conversationId} />
             )}
 
             <ChatComposer

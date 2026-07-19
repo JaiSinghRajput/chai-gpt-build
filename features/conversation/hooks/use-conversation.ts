@@ -11,6 +11,7 @@ import {
     updateConversation,
 } from "@/features/conversation/actions/conversation-actions";
 import { queryKeys } from "../utils/query-keys";
+import { createBranch, deleteBranch, listBranches, renameBranch } from "@/features/conversation/actions/branch-actions";
 
 
 /**
@@ -20,6 +21,7 @@ export function useConversations() {
     return useQuery({
         queryKey: queryKeys.conversations.all,
         queryFn: () => listConversations(),
+        staleTime: 30_000,
     });
 }
 
@@ -95,6 +97,73 @@ export function useDeleteConversation(activeId?: string) {
         },
         onError: (error: Error) => {
             toast.error(error.message || "Could not delete chat");
+        },
+    });
+}
+
+/** Fetches branches for a conversation. Only enabled once the caller wants them. */
+export function useBranches(conversationId: string, enabled: boolean) {
+    return useQuery({
+        queryKey: queryKeys.branches.byConversation(conversationId),
+        queryFn: () => listBranches(conversationId),
+        enabled,
+        staleTime: 30_000,
+    });
+}
+
+/** Forks a new branch from a message and navigates to it. */
+export function useCreateBranch(conversationId: string) {
+    const queryClient = useQueryClient();
+    const router = useRouter();
+
+    return useMutation({
+        mutationFn: (fromMessageId: string) => createBranch(conversationId, fromMessageId),
+        onSuccess: (branch) => {
+            void queryClient.invalidateQueries({
+                queryKey: queryKeys.branches.byConversation(conversationId),
+            });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
+            router.push(`/c/${conversationId}?branch=${branch.id}`, { scroll: false });
+        },
+        onError: (error: Error) => {
+            toast.error(error.message || "Could not create branch");
+        },
+    });
+}
+
+/** Renames a branch. */
+export function useRenameBranch(conversationId: string) {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ branchId, name }: { branchId: string; name: string }) =>
+            renameBranch(branchId, name),
+        onSuccess: () => {
+            void queryClient.invalidateQueries({
+                queryKey: queryKeys.branches.byConversation(conversationId),
+            });
+        },
+        onError: (error: Error) => {
+            toast.error(error.message || "Could not rename branch");
+        },
+    });
+}
+
+/** Deletes a branch (soft delete). */
+export function useDeleteBranch(conversationId: string) {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (branchId: string) => deleteBranch(branchId),
+        onSuccess: () => {
+            void queryClient.invalidateQueries({
+                queryKey: queryKeys.branches.byConversation(conversationId),
+            });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
+            toast.success("Branch deleted");
+        },
+        onError: (error: Error) => {
+            toast.error(error.message || "Could not delete branch");
         },
     });
 }

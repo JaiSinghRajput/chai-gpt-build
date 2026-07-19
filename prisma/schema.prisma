@@ -38,6 +38,7 @@ model Conversation {
 
   messages Message[]
   notes    Note[]
+  branches Branch[]
 
   @@index([userId, lastMessageAt(sort: Desc)])
   @@index([userId, isPinned, lastMessageAt(sort: Desc)])
@@ -54,23 +55,6 @@ enum MessageStatus {
   PENDING
   COMPLETE
   ERROR
-}
-
-model Message {
-  id             String        @id @default(cuid())
-  conversationId String
-  role           MessageRole
-  status         MessageStatus @default(COMPLETE)
-  content        String        @db.Text
-  parts          Json? // 
-  metadata       Json?
-
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([conversationId, createdAt(sort: Desc)])
 }
 
 enum NoteStatus {
@@ -129,8 +113,54 @@ model Memory {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, key])
   @@index([userId])
-   @@unique([userId, key])
 }
 
+model Branch {
+  id             String    @id @default(cuid())
+  conversationId String
+  name           String    @default("main")
+  isDefault      Boolean   @default(false)
+  forkedFromId   String?
+  forkMessageId  String?
+  headMessageId  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
 
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  forkedFrom   Branch?      @relation("BranchFork", fields: [forkedFromId], references: [id])
+  children     Branch[]     @relation("BranchFork")
+  forkMessage  Message?     @relation("ForkPoint", fields: [forkMessageId], references: [id])
+  head         Message?     @relation("BranchHead", fields: [headMessageId], references: [id])
+  messages     Message[]    @relation("BranchOwner")
+
+  @@index([conversationId, deletedAt])
+}
+
+model Message {
+  id             String        @id @default(cuid())
+  conversationId String
+  branchId       String
+  parentId       String?
+  role           MessageRole
+  status         MessageStatus @default(COMPLETE)
+  content        String        @db.Text
+  parts          Json?
+  metadata       Json?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  branch       Branch       @relation("BranchOwner", fields: [branchId], references: [id])
+  parent       Message?     @relation("MessageTree", fields: [parentId], references: [id])
+  children     Message[]    @relation("MessageTree")
+  forkedInto   Branch[]     @relation("ForkPoint")
+  headOf       Branch[]     @relation("BranchHead")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([conversationId, createdAt(sort: Desc)])
+  @@index([branchId])
+  @@index([parentId])
+}

@@ -1,4 +1,4 @@
-import { loadChatMessages, saveChatMessages } from "@/features/ai/actions/chat-store";
+import { loadChatMessages, saveChatMessages, getDefaultBranchId } from "@/features/ai/actions/chat-store";
 import { createTools } from "@/features/ai/actions/create-tools";
 import { getChatModel } from "@/features/ai/utils/model";
 import { requireUser } from "@/features/auth/action/require-user";
@@ -15,7 +15,7 @@ import { convertToModelMessages, createIdGenerator, createUIMessageStream, creat
 export async function POST(req: Request) {
     await auth.protect();
 
-    const { message, id }: { message: UIMessage, id: string } = await req.json();
+    const { message, id, branchId }: { message: UIMessage; id: string; branchId?: string } = await req.json();
 
     if (!message || !id) {
         return new Response("Missing message or conversation id", { status: 400 });
@@ -33,8 +33,9 @@ export async function POST(req: Request) {
     if (!conversation) {
         return new Response("Conversation not found", { status: 404 });
     }
+    const activeBranchId = branchId ?? (await getDefaultBranchId(id));
 
-    const previousMessages = await loadChatMessages(id);
+   const previousMessages = await loadChatMessages(id, activeBranchId);
 
     const alreadySaved = previousMessages.some(
         (storedMessage)=>storedMessage.id === message.id
@@ -42,9 +43,9 @@ export async function POST(req: Request) {
 
     const messages = alreadySaved ? previousMessages : [...previousMessages, message];
 
-    if(!alreadySaved){
-        await saveChatMessages(id, [message]);
-    }
+   if (!alreadySaved) {
+    await saveChatMessages(id, [message], { branchId: activeBranchId });
+}
 
     const result =  streamText({
         model: getChatModel(conversation.model),
@@ -62,13 +63,13 @@ export async function POST(req: Request) {
            stream:result.stream,
            originalMessages:messages,
            generateMessageId:createIdGenerator({prefix:"msg" , size:16}),
-           onEnd:async({messages:finalMessages})=>{
-            try {
-                await saveChatMessages(id , finalMessages , {updateTitle:false})
-            } catch (error) {
-                console.error(error);
-            }
-           }
+         onEnd:async({messages:finalMessages})=>{
+    try {
+        await saveChatMessages(id, finalMessages, { branchId: activeBranchId, updateTitle: false });
+    } catch (error) {
+        console.error(error);
+    }
+}
         })
     })
 

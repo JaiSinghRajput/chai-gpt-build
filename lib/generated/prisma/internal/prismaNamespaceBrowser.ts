@@ -53,9 +53,10 @@ export const AnyNull = runtime.AnyNull
 export const ModelName = {
   User: 'User',
   Conversation: 'Conversation',
-  Message: 'Message',
   Note: 'Note',
-  Memory: 'Memory'
+  Memory: 'Memory',
+  Branch: 'Branch',
+  Message: 'Message'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -104,21 +105,6 @@ export const ConversationScalarFieldEnum = {
 export type ConversationScalarFieldEnum = (typeof ConversationScalarFieldEnum)[keyof typeof ConversationScalarFieldEnum]
 
 
-export const MessageScalarFieldEnum = {
-  id: 'id',
-  conversationId: 'conversationId',
-  role: 'role',
-  status: 'status',
-  content: 'content',
-  parts: 'parts',
-  metadata: 'metadata',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-} as const
-
-export type MessageScalarFieldEnum = (typeof MessageScalarFieldEnum)[keyof typeof MessageScalarFieldEnum]
-
-
 export const NoteScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -147,6 +133,39 @@ export const MemoryScalarFieldEnum = {
 } as const
 
 export type MemoryScalarFieldEnum = (typeof MemoryScalarFieldEnum)[keyof typeof MemoryScalarFieldEnum]
+
+
+export const BranchScalarFieldEnum = {
+  id: 'id',
+  conversationId: 'conversationId',
+  name: 'name',
+  isDefault: 'isDefault',
+  forkedFromId: 'forkedFromId',
+  forkMessageId: 'forkMessageId',
+  headMessageId: 'headMessageId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  deletedAt: 'deletedAt'
+} as const
+
+export type BranchScalarFieldEnum = (typeof BranchScalarFieldEnum)[keyof typeof BranchScalarFieldEnum]
+
+
+export const MessageScalarFieldEnum = {
+  id: 'id',
+  conversationId: 'conversationId',
+  branchId: 'branchId',
+  parentId: 'parentId',
+  role: 'role',
+  status: 'status',
+  content: 'content',
+  parts: 'parts',
+  metadata: 'metadata',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type MessageScalarFieldEnum = (typeof MessageScalarFieldEnum)[keyof typeof MessageScalarFieldEnum]
 
 
 export const SortOrder = {

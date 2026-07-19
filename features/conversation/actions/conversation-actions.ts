@@ -13,6 +13,7 @@ export type ConversationListItem = {
     lastMessageAt: Date;
     createdAt: Date;
     updatedAt: Date;
+    branchCount: number;
 };
 
 
@@ -55,7 +56,7 @@ export async function getConversation(conversationId: string) {
 export async function listConversations(): Promise<ConversationListItem[]> {
     const user = await requireUser();
 
-    return prisma.conversation.findMany({
+    const conversations = await prisma.conversation.findMany({
         where: { userId: user.id, isArchived: false },
         orderBy: [{ isPinned: "desc" }, { lastMessageAt: "desc" }],
         select: {
@@ -66,23 +67,43 @@ export async function listConversations(): Promise<ConversationListItem[]> {
             lastMessageAt: true,
             createdAt: true,
             updatedAt: true,
+            _count: {
+                select: { branches: { where: { deletedAt: null } } },
+            },
         },
-    })
+    });
+
+    return conversations.map(({ _count, ...rest }) => ({
+        ...rest,
+        branchCount: _count.branches,
+    }));
 }
 
 /**
- * Creates a new conversation for the current user.
+ * Creates a new conversation (with its default "main" branch) for the current user.
  *
  * @param title - Optional title; defaults to "New Chat".
  */
 export async function createConversation(title = "New Chat") {
     const user = await requireUser();
 
-    return prisma.conversation.create({
-        data: {
-            userId: user.id,
-            title: title.trim() || "New Chat",
-        },
+    return prisma.$transaction(async (tx) => {
+        const conversation = await tx.conversation.create({
+            data: {
+                userId: user.id,
+                title: title.trim() || "New Chat",
+            },
+        });
+
+        await tx.branch.create({
+            data: {
+                conversationId: conversation.id,
+                name: "main",
+                isDefault: true,
+            },
+        });
+
+        return conversation;
     });
 }
 
