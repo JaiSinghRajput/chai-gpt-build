@@ -16,6 +16,25 @@ export type MessageItem = {
     updatedAt: Date;
 };
 
+/** Returns the default branch id for a conversation, creating "main" if needed. */
+async function getDefaultBranchId(conversationId: string) {
+  const existing = await prisma.branch.findFirst({
+    where: { conversationId, isDefault: true },
+    select: { id: true },
+  });
+
+  if (existing) {
+    return existing.id;
+  }
+
+  const created = await prisma.branch.create({
+    data: { conversationId, name: "main", isDefault: true },
+    select: { id: true },
+  });
+
+  return created.id;
+}
+
 /**
  * Verifies that a conversation exists and belongs to the given user.
  *
@@ -63,6 +82,7 @@ export async function listMessages(
   export async function createMessage(conversationId: string, content: string) {
     const user = await requireUser();
     const conversation = await assertOwnsConversation(conversationId, user.id);
+    const branchId = await getDefaultBranchId(conversationId);
   
     const trimmed = content.trim();
     if (!trimmed) {
@@ -72,6 +92,7 @@ export async function listMessages(
     const message = await prisma.message.create({
       data: {
         conversationId,
+        branchId,
         role: "USER",
         status: "COMPLETE",
         content: trimmed,
